@@ -188,36 +188,22 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  new MenuCard(
-    "img/tabs/vegy.jpg",
-    "vegy",
-    'Меню "Фитнес"',
-    "Меню 'Фитнес' - это новый подход к приготовлению блюд: больше свежих овощей и фруктов. Продукт активных и здоровых людей. Это абсолютно новый продукт с оптимальной ценой и высоким качеством!",
-    9,
-    '.menu .container',
-    'menu__item',
-    'big'
-  ).render();
+  const getResource = async (url) => {
+    const res = await fetch(url);
 
-  new MenuCard(
-    "img/tabs/elite.jpg",
-    "elite",
-    'Меню “Премиум”',
-    "В меню “Премиум” мы используем не только красивый дизайн упаковки, но и качественное исполнение блюд. Красная рыба, морепродукты, фрукты - ресторанное меню без похода в ресторан!",
-    14,
-    '.menu .container',
-    'menu__item',
-  ).render();
+    if (!res.ok) {
+      throw new Error(`Could not fetch ${url}, status: ${res.status}`);
+    }
 
-  new MenuCard(
-    "img/tabs/post.jpg",
-    "post",
-    'Меню "Постное"',
-    "Меню “Постное” - это тщательный подбор ингредиентов: полное отсутствие продуктов животного происхождения, молоко из миндаля, овса, кокоса или гречки, правильное количество белков за счет тофу и импортных вегетарианских стейков.",
-    21,
-    '.menu .container',
-    'menu__item',
-  ).render();
+    return res.json();
+  };
+
+  getResource('http://localhost:3000/menu')
+    .then(data => {
+      data.forEach(({img,altimg, title, descr, price}) => {
+        new MenuCard(img,altimg, title, descr, price, ".menu .container").render();
+      });
+    });
 
     // Forms 
 
@@ -229,66 +215,148 @@ window.addEventListener("DOMContentLoaded", () => {
     };
 
     forms.forEach(item => {
-        postData(item);
+      bindPostData(item);
     });
 
-    function postData(form) {
-        form.addEventListener('submit', (e) => {
-            e.preventDefault();
+    const postData = async (url, data) => {
+      const res = await fetch(url, {
+        method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json'
+              },
+              body: data
+      });
 
-            let statusMessage = document.createElement('img');
-            statusMessage.src = message.loading;
-            statusMessage.style.cssText = ` 
-                display: block;
-                margin: 0 auto;
-            `;
-            form.insertAdjacentElement('afterend',statusMessage);
-        
-            const request = new XMLHttpRequest();
-            request.open('POST', 'server.php');
-            request.setRequestHeader('Content-type', 'application/json; charset=utf-8');
-            const formData = new FormData(form);
+      return res.json();
+    };
 
-            const object = {};
-            formData.forEach(function(value, key){
-                object[key] = value;
-            });
-            const json = JSON.stringify(object);
+    function bindPostData(form) {
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
 
-            request.send(json);
+        let statusMessage = document.createElement('img');
+        statusMessage.src = message.loading;
+        statusMessage.style.cssText = `
+            display: block;
+            margin: 0 auto;
+        `;
+        form.insertAdjacentElement('afterend', statusMessage);
+    
+        const formData = new FormData(form);
 
-            request.addEventListener('load', () => {
-                if (request.status === 200) {
-                    showThanksModal(message.success); 
-                    form.reset();
-                        statusMessage.remove();
-                } else {
-                  showThanksModal(message.failure);
-                }
-            });
+        const json = JSON.stringify(Object.fromEntries(formData.entries()));
+
+        postData('http://localhost:3000/requests', json)
+        .then(data => {
+          console.log(data);
+          showThanksModal(message.success);
+          statusMessage.remove();
+        }).catch(() => {
+            showThanksModal(message.failure);
+        }).finally(() => {
+            form.reset();
         });
+  })  ;
+}
+
+  function showThanksModal(message) {
+    const prevModalDialog = document.querySelector('.modal__dialog');
+
+    prevModalDialog.classList.add('hide');
+    openModal();
+
+    const thanksModal = document.createElement('div');
+    thanksModal.classList.add('.modal__dialog');
+    thanksModal.innerHTML = `
+        <div class="modal__content">
+            <div class="modal__close" data-close>×</div>
+            <div class="modal__title">${message}</div>
+        </div>
+    `;
+    document.querySelector('.modal').append(thanksModal);
+    setTimeout(() => {
+      thanksModal.remove();
+      prevModalDialog.classList.add('show');
+      prevModalDialog.classList.remove('hide');
+      closeModal();
+    }, 4000);
+  }
+
+    // Slider
+    
+  const slides = document.querySelectorAll('.offer__slide'),
+        prev = document.querySelector('.offer__slider-prev'),
+        next = document.querySelector('.offer__slider-next'),
+        total = document.querySelector('#total'),
+        current = document.querySelector('#current'),
+        slidesWrapper = document.querySelector('.offer__slider-wrapper'),
+        slidesField = document.querySelector('.offer__slider-inner'),
+        width = window.getComputedStyle(slidesWrapper).width;
+
+  let slideIndex = 1;
+  let offset = 0;
+
+  if (slides.length < 10) {
+    total.textContent = `0${slides.length}`;
+    current.textContent = `0${slideIndex}`;
+  } else {
+    total.textContent = slides.length;
+    total.textContent = slides.length;
+  }
+
+  slidesField.style.width = 100 * slides.length + '%';
+  slidesField.style.display = 'flex';
+  slidesField.style.transition = '0.5s all';
+
+  slidesWrapper.style.overflow = 'hidden';
+
+
+  slides.forEach(slide => {
+    slide.style.width = width;
+  });
+
+  next.addEventListener('click', () => {
+    if (offset == +width.slice(0, width.length - 2) * (slides.length - 1)) {
+      offset = 0;
+    } else {
+      offset += +width.slice(0, width.length - 2);
     }
 
-    function showThanksModal(message) {
-      const prevModalDialog = document.querySelector('.modal__dialog');
+    slidesField.style.transform = `translateX(-${offset}px)`;
 
-      prevModalDialog.classList.add('hide');
-      openModal();
-
-      const thanksModal = document.createElement('div');
-      thanksModal.classList.add('.modal__dialog');
-      thanksModal.innerHTML = `
-          <div class="modal__content">
-              <div class="modal__close" data-close>×</div>
-              <div class="modal__title">${message}</div>
-          </div>
-      `;
-      document.querySelector('.modal').append(thanksModal);
-      setTimeout(() => {
-        thanksModal.remove();
-        prevModalDialog.classList.add('show');
-        prevModalDialog.classList.remove('hide');
-        closeModal();
-      }, 4000);
+    if (slideIndex == slides.length) {
+      slideIndex = 1;
+    } else {
+      slideIndex++;
     }
+
+    if (slides.length < 10) {
+      current.textContent = `0${slideIndex}`;
+    } else {
+      current.textContent = slideIndex;
+    }
+  });
+  
+  prev.addEventListener('click', () => {
+    if (offset == 0) {
+      offset = +width.slice(0, width.length - 2) * (slides.length - 1);
+    } else {
+      offset -= +width.slice(0, width.length - 2);
+    }
+
+    slidesField.style.transform = `translateX(-${offset}px)`;
+
+    if (slideIndex == 1) {
+      slideIndex = slides.length;
+    } else {
+      slideIndex--;
+    }
+
+    if (slides.length < 10) {
+      current.textContent = `0${slideIndex}`;
+    } else {
+      current.textContent = slideIndex;
+    }
+  });
+//     // npx json-server db.json
 });
